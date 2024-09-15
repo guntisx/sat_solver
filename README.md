@@ -1,4 +1,5 @@
 # sat_solver
+(source https://chatgpt.com/share/66e495fa-0e9c-8007-beea-1ab5472d8782)
 
 Below is a Python program that serves as a universal SAT solver. It reads a SAT instance in the standard DIMACS CNF format, attempts to find a satisfying assignment using the DPLL (Davis-Putnam-Logemann-Loveland) algorithm, and outputs the result in a clear, tabular format.
 
