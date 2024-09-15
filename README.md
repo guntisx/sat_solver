@@ -1,6 +1,6 @@
 # sat_solver
 
-Below is a Python program that serves as a universal SAT solver. It reads a SAT instance in the standard DIMACS CNF format, attempts to find a satisfying assignment using the DPLL (Davis-Putnam-Logemann-Loveland) algorithm, and outputs the result in a clear, tabular format similar to the one provided earlier.
+Below is a Python program that serves as a universal SAT solver. It reads a SAT instance in the standard DIMACS CNF format, attempts to find a satisfying assignment using the DPLL (Davis-Putnam-Logemann-Loveland) algorithm, and outputs the result in a clear, tabular format.
 
 ### Overview
 
