@@ -1,152 +1,156 @@
 import sys
-import copy
+from typing import List, Set, Dict, Optional
 
-def parse_dimacs(file_path):
-    """
-    Parses a DIMACS CNF file and returns the number of variables and the list of clauses.
-    """
+class SATSolver:
+    def __init__(self, clauses: List[List[int]], num_vars: int):
+        self.clauses = clauses
+        self.num_vars = num_vars
+        self.assignments: Dict[int, bool] = {}
+
+    def solve(self) -> Optional[Dict[int, bool]]:
+        return self.dpll(self.clauses, self.assignments.copy())
+
+    def dpll(self, clauses: List[List[int]], assignments: Dict[int, bool]) -> Optional[Dict[int, bool]]:
+        clauses = self.simplify_clauses(clauses, assignments)
+        
+        if not clauses:
+            return assignments  # All clauses satisfied
+        if any(len(clause) == 0 for clause in clauses):
+            return None  # Conflict detected
+
+        # Unit Propagation
+        unit = self.find_unit_clause(clauses)
+        if unit:
+            var, value = unit
+            assignments[var] = value
+            return self.dpll(clauses, assignments)
+
+        # Pure Literal Elimination
+        pure = self.find_pure_literal(clauses)
+        if pure:
+            var, value = pure
+            assignments[var] = value
+            return self.dpll(clauses, assignments)
+
+        # Choose the first unassigned variable
+        var = self.choose_variable(clauses, assignments)
+        for value in [True, False]:
+            new_assignments = assignments.copy()
+            new_assignments[var] = value
+            result = self.dpll(clauses, new_assignments)
+            if result is not None:
+                return result
+
+        return None  # No solution found
+
+    def simplify_clauses(self, clauses: List[List[int]], assignments: Dict[int, bool]) -> List[List[int]]:
+        simplified = []
+        for clause in clauses:
+            new_clause = []
+            satisfied = False
+            for literal in clause:
+                var = abs(literal)
+                val = assignments.get(var)
+                if val is not None:
+                    if (literal > 0 and val) or (literal < 0 and not val):
+                        satisfied = True
+                        break  # Clause is satisfied
+                    else:
+                        continue  # Literal is False, skip
+                else:
+                    new_clause.append(literal)
+            if not satisfied:
+                simplified.append(new_clause)
+        return simplified
+
+    def find_unit_clause(self, clauses: List[List[int]]) -> Optional[tuple]:
+        for clause in clauses:
+            if len(clause) == 1:
+                literal = clause[0]
+                var = abs(literal)
+                value = literal > 0
+                return (var, value)
+        return None
+
+    def find_pure_literal(self, clauses: List[List[int]]) -> Optional[tuple]:
+        counts: Dict[int, Set[bool]] = {}
+        for clause in clauses:
+            for literal in clause:
+                var = abs(literal)
+                val = literal > 0
+                if var not in counts:
+                    counts[var] = set()
+                counts[var].add(val)
+        for var, vals in counts.items():
+            if len(vals) == 1:
+                return (var, next(iter(vals)))
+        return None
+
+    def choose_variable(self, clauses: List[List[int]], assignments: Dict[int, bool]) -> int:
+        # Heuristic: choose the variable that appears most frequently
+        frequency: Dict[int, int] = {}
+        for clause in clauses:
+            for literal in clause:
+                var = abs(literal)
+                if var not in assignments:
+                    frequency[var] = frequency.get(var, 0) + 1
+        if frequency:
+            return max(frequency, key=frequency.get)
+        else:
+            return 1  # Default to variable 1 if no variables left
+
+def parse_dimacs(dimacs: str) -> (List[List[int]], int):
     clauses = []
     num_vars = 0
-    num_clauses = 0
-    with open(file_path, 'r') as f:
-        for line in f:
-            # Remove comments and whitespace
-            line = line.strip()
-            if not line or line.startswith('c'):
-                continue
-            if line.startswith('p'):
-                parts = line.split()
-                if len(parts) != 4 or parts[1] != 'cnf':
-                    raise ValueError("Invalid problem line in DIMACS file.")
-                num_vars = int(parts[2])
-                num_clauses = int(parts[3])
-            else:
-                # Clause lines
-                literals = list(map(int, line.split()))
-                if literals[-1] != 0:
-                    raise ValueError("Each clause must be terminated with a 0.")
-                clause = literals[:-1]
-                clauses.append(clause)
-    if len(clauses) != num_clauses:
-        print(f"Warning: Expected {num_clauses} clauses, but found {len(clauses)}.")
-    return num_vars, clauses
-
-def find_unit_clause(clauses, assignment):
-    """
-    Finds a unit clause and returns the literal, or None if no unit clause exists.
-    """
-    for clause in clauses:
-        unassigned = [lit for lit in clause if abs(lit) not in assignment]
-        if len(unassigned) == 1:
-            return unassigned[0]
-    return None
-
-def find_pure_literal(clauses, assignment):
-    """
-    Finds a pure literal and returns it, or None if no pure literal exists.
-    """
-    literal_counts = {}
-    for clause in clauses:
-        for lit in clause:
-            if abs(lit) in assignment:
-                continue
-            literal_counts[lit] = literal_counts.get(lit, 0) + 1
-    for lit in literal_counts:
-        if -lit not in literal_counts:
-            return lit
-    return None
-
-def dpll(clauses, assignment, num_vars):
-    """
-    Implements the DPLL algorithm.
-    """
-    # Remove clauses that are already satisfied
-    clauses = [clause for clause in clauses if not any((lit in assignment) if lit > 0 else (-lit in assignment) for lit in clause)]
-    
-    # If no clauses left, all are satisfied
-    if not clauses:
-        return assignment
-    
-    # If an empty clause is present, backtrack
-    for clause in clauses:
-        if not clause:
-            return None
-    
-    # Unit Clause Heuristic
-    unit = find_unit_clause(clauses, assignment)
-    if unit is not None:
-        var = abs(unit)
-        val = unit > 0
-        new_assignment = copy.deepcopy(assignment)
-        new_assignment[var] = val
-        return dpll(clauses, new_assignment, num_vars)
-    
-    # Pure Literal Heuristic
-    pure = find_pure_literal(clauses, assignment)
-    if pure is not None:
-        var = abs(pure)
-        val = pure > 0
-        new_assignment = copy.deepcopy(assignment)
-        new_assignment[var] = val
-        return dpll(clauses, new_assignment, num_vars)
-    
-    # Choose the first unassigned variable
-    for clause in clauses:
-        for lit in clause:
-            var = abs(lit)
-            if var not in assignment:
-                break
-        else:
+    for line in dimacs.splitlines():
+        line = line.strip()
+        if not line or line.startswith('c'):
             continue
-        break
-    else:
-        return assignment  # All variables assigned
-    
-    # Try assigning True
-    new_assignment = copy.deepcopy(assignment)
-    new_assignment[var] = True
-    result = dpll(clauses, new_assignment, num_vars)
-    if result is not None:
-        return result
-    
-    # If True didn't work, try False
-    new_assignment = copy.deepcopy(assignment)
-    new_assignment[var] = False
-    return dpll(clauses, new_assignment, num_vars)
+        if line.startswith('p'):
+            parts = line.split()
+            if len(parts) != 4 or parts[1] != 'cnf':
+                raise ValueError("Invalid problem line in DIMACS format.")
+            num_vars = int(parts[2])
+            # num_clauses = int(parts[3])  # Not used
+        else:
+            literals = list(map(int, line.split()))
+            if literals[-1] != 0:
+                raise ValueError("Clause line does not end with 0.")
+            clauses.append(literals[:-1])
+    return clauses, num_vars
 
-def format_output(assignment, num_vars):
-    """
-    Formats the assignment into a table.
-    """
-    header = f"{'Variable':<10} | {'Value':<6}"
-    separator = "-" * len(header)
-    lines = [header, separator]
-    for var in range(1, num_vars + 1):
-        val = assignment.get(var, False)  # Default to False if unassigned
-        lines.append(f"x{var:<8} | {str(val):<6}")
-    return "\n".join(lines)
+def read_dimacs_file(filename: str) -> (List[List[int]], int):
+    with open(filename, 'r') as file:
+        dimacs = file.read()
+    return parse_dimacs(dimacs)
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: python sat_solver.py <input_dimacs_file>")
+        print("Usage: python satsolver.py <input_dimacs_file>")
         sys.exit(1)
     
-    file_path = sys.argv[1]
+    input_file = sys.argv[1]
     try:
-        num_vars, clauses = parse_dimacs(file_path)
+        clauses, num_vars = read_dimacs_file(input_file)
     except Exception as e:
-        print(f"Error parsing DIMACS file: {e}")
+        print(f"Error reading DIMACS file: {e}")
         sys.exit(1)
-    
-    assignment = {}
-    result = dpll(clauses, assignment, num_vars)
-    
-    if result is not None:
-        print("SATISFIABLE")
-        print("\n### Satisfying Assignment:\n")
-        print(format_output(result, num_vars))
+
+    solver = SATSolver(clauses, num_vars)
+    solution = solver.solve()
+
+    if solution is None:
+        print("UNSAT")
     else:
-        print("UNSATISFIABLE")
+        print("SAT")
+        # DIMACS expects a line with variable assignments ending with 0
+        assignment_line = []
+        for var in range(1, num_vars + 1):
+            val = solution.get(var, False)
+            literal = var if val else -var
+            assignment_line.append(str(literal))
+        assignment_line.append('0')
+        print(' '.join(assignment_line))
 
 if __name__ == "__main__":
     main()
